@@ -1,14 +1,34 @@
-import {
-  LLAMA_3_2_1B_INST_Q4_0,
-  QWEN3_600M_INST_Q4,
-  EMBEDDINGGEMMA_300M_Q4_0,
-  completion,
-  embed,
-  loadModel,
-  unloadModel,
-} from "@qvac/sdk";
 import { Notice, TFile } from "obsidian";
 import type { VaultAssistantSettings } from "./settings";
+
+/** Type-only import: erased at compile time, so the SDK is never loaded eagerly. */
+type QvacSdk = typeof import("@qvac/sdk");
+
+let sdkPromise: Promise<QvacSdk> | null = null;
+
+/**
+ * Load the QVAC SDK lazily on first AI use — never at plugin startup.
+ *
+ * The SDK stays an external `require("@qvac/sdk")` resolved from the plugin
+ * folder's own node_modules (its native worker binary must live there).
+ * If it can't be resolved, throw an actionable error instead of letting
+ * Obsidian fail the entire plugin load with "Failed to load plugin".
+ */
+function getSdk(): Promise<QvacSdk> {
+  if (!sdkPromise) {
+    sdkPromise = import("@qvac/sdk").catch((err: unknown) => {
+      sdkPromise = null; // allow retry once the user fixes the install
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        "QVAC SDK failed to load. The plugin folder is probably missing " +
+          "node_modules/@qvac/sdk — copy the ENTIRE built plugin folder " +
+          "(manifest.json, main.js, styles.css AND node_modules), then reload " +
+          `Obsidian (Ctrl/Cmd+R). Technical detail: ${reason}`
+      );
+    });
+  }
+  return sdkPromise;
+}
 
 export type QvacStatus = "idle" | "loading" | "ready" | "error";
 
@@ -75,12 +95,13 @@ export class QvacService {
       notice.setMessage(`QVAC: preparing on-device model… ${p.percentage.toFixed(0)}%`);
     };
     try {
+      const sdk = await getSdk();
       // Branch explicitly: loadModel's descriptor overload is generic over a
       // single descriptor type, so a union of two descriptors won't infer.
       const modelId =
         this.getSettings().llmModel === "qwen3-0.6b"
-          ? await loadModel({ modelSrc: QWEN3_600M_INST_Q4, onProgress })
-          : await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, onProgress });
+          ? await sdk.loadModel({ modelSrc: sdk.QWEN3_600M_INST_Q4, onProgress })
+          : await sdk.loadModel({ modelSrc: sdk.LLAMA_3_2_1B_INST_Q4_0, onProgress });
       this.llmModelId = modelId;
       this.setStatus("ready");
       notice.setMessage("QVAC: model ready — running 100% on-device");
@@ -106,8 +127,9 @@ export class QvacService {
     this.setStatus("loading");
     const notice = new Notice("QVAC: preparing embedding model… 0%", 0);
     try {
-      const modelId = await loadModel({
-        modelSrc: EMBEDDINGGEMMA_300M_Q4_0,
+      const sdk = await getSdk();
+      const modelId = await sdk.loadModel({
+        modelSrc: sdk.EMBEDDINGGEMMA_300M_Q4_0,
         onProgress: (p: { percentage: number }) => {
           notice.setMessage(`QVAC: preparing embedding model… ${p.percentage.toFixed(0)}%`);
         },
@@ -128,8 +150,9 @@ export class QvacService {
   /** Run a chat completion and return the full text. */
   private async runCompletion(system: string, user: string): Promise<string> {
     const modelId = await this.ensureLlmModel();
+    const sdk = await getSdk();
     const s = this.getSettings();
-    const run = completion({
+    const run = sdk.completion({
       modelId,
       history: [
         { role: "system", content: system },
@@ -146,7 +169,8 @@ export class QvacService {
   /** Embed one or more texts with the on-device embedding model. */
   async embedTexts(texts: string[]): Promise<number[][]> {
     const modelId = await this.ensureEmbedModel();
-    const { embedding } = await embed({ modelId, text: texts });
+    const sdk = await getSdk();
+    const { embedding } = await sdk.embed({ modelId, text: texts });
     return embedding;
   }
 
@@ -210,16 +234,40 @@ export class QvacService {
 
   /** Free model RAM. Called on plugin unload and when switching models. */
   async unloadAll(): Promise<void> {
+    const sdk = await getSdk().catch(() => null);
     const ids = [this.llmModelId, this.embedModelId].filter((id): id is string => !!id);
     this.llmModelId = null;
     this.embedModelId = null;
+    if (!sdk) {
+      this.setStatus("idle");
+      return;
+    }
     for (const modelId of ids) {
       try {
-        await unloadModel({ modelId });
+        await sdk.unloadModel({ modelId });
       } catch {
         /* best effort */
       }
     }
     this.setStatus("idle");
+  }
+
+  /**
+   * Verify the SDK module loads, without downloading any model.
+   * Powers the "Diagnose QVAC setup" command.
+   */
+  async diagnose(): Promise<string> {
+    const sdk = await getSdk();
+    const checks: Array<[string, unknown]> = [
+      ["loadModel", sdk.loadModel],
+      ["completion", sdk.completion],
+      ["embed", sdk.embed],
+      ["unloadModel", sdk.unloadModel],
+    ];
+    const missing = checks.filter(([, fn]) => typeof fn !== "function").map(([name]) => name);
+    if (missing.length > 0) {
+      throw new Error(`QVAC SDK loaded but is missing: ${missing.join(", ")}`);
+    }
+    return "QVAC SDK loads OK — loadModel, completion, embed, unloadModel all present. Models download on first AI command (~2 GB, cached locally).";
   }
 }
