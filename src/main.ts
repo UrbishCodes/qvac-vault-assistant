@@ -18,7 +18,8 @@ export default class QvacVaultAssistantPlugin extends Plugin {
 
     this.qvac = new QvacService(
       () => this.settings,
-      (status) => this.updateStatusBar(status)
+      (status) => this.updateStatusBar(status),
+      this
     );
 
     this.addSettingTab(new VaultAssistantSettingTab(this.app, this));
