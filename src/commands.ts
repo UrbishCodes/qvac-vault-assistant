@@ -1,6 +1,7 @@
 import { Editor, MarkdownFileInfo, MarkdownView, Notice, TFile } from "obsidian";
 import type QvacVaultAssistantPlugin from "./main";
 import { AskModal, RelatedNotesModal, ResultModal } from "./modals";
+import { friendlyQvacError } from "./qvac";
 
 /** Max note characters sent to the model (keeps context small & fast). */
 const MAX_NOTE_CHARS = 12000;
@@ -110,7 +111,7 @@ async function summarizeNote(plugin: QvacVaultAssistantPlugin, file: TFile): Pro
       "Insert as section"
     ).open();
   } catch (err) {
-    new Notice(`Summarize failed: ${err instanceof Error ? err.message : err}`);
+    new Notice(`Summarize failed: ${friendlyQvacError(err)}`, 12000);
   }
 }
 
@@ -133,7 +134,7 @@ async function continueWriting(plugin: QvacVaultAssistantPlugin, editor: Editor)
     else editor.replaceRange(continued, cursor);
     new Notice("Inserted AI continuation.");
   } catch (err) {
-    new Notice(`Continue failed: ${err instanceof Error ? err.message : err}`);
+    new Notice(`Continue failed: ${friendlyQvacError(err)}`, 12000);
   }
 }
 
@@ -154,7 +155,7 @@ async function askAboutNote(plugin: QvacVaultAssistantPlugin, file: TFile): Prom
       plugin.insertAtCursor(`\n\n> **Q:** ${question}\n>\n> ${inserted.replace(/\n/g, "\n> ")}\n`)
     ).open();
   } catch (err) {
-    new Notice(`Ask failed: ${err instanceof Error ? err.message : err}`);
+    new Notice(`Ask failed: ${friendlyQvacError(err)}`, 12000);
   }
 }
 
@@ -176,7 +177,7 @@ async function extractActionItems(plugin: QvacVaultAssistantPlugin, file: TFile)
       "Insert as section"
     ).open();
   } catch (err) {
-    new Notice(`Extract failed: ${err instanceof Error ? err.message : err}`);
+    new Notice(`Extract failed: ${friendlyQvacError(err)}`, 12000);
   }
 }
 
@@ -211,6 +212,6 @@ async function findRelatedNotes(plugin: QvacVaultAssistantPlugin): Promise<void>
     });
     new RelatedNotesModal(plugin.app, query, hits).open();
   } catch (err) {
-    new Notice(`Search failed: ${err instanceof Error ? err.message : err}`);
+    new Notice(`Search failed: ${friendlyQvacError(err)}`, 12000);
   }
 }
