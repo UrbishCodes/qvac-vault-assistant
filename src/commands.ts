@@ -65,6 +65,22 @@ export function registerCommands(plugin: QvacVaultAssistantPlugin): void {
     name: "Open Vault Assistant",
     callback: () => void plugin.activateView(),
   });
+
+  plugin.addCommand({
+    id: "diagnose-setup",
+    name: "Diagnose QVAC setup",
+    callback: () =>
+      void (async () => {
+        try {
+          new Notice(await plugin.qvac.diagnose(), 9000);
+        } catch (err) {
+          new Notice(
+            `QVAC diagnose failed: ${err instanceof Error ? err.message : err}`,
+            15000
+          );
+        }
+      })(),
+  });
 }
 
 async function withProgress<T>(label: string, fn: () => Promise<T>): Promise<T> {
