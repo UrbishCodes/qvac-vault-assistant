@@ -22,6 +22,29 @@ function stripThinking(text: string): string {
 }
 
 /**
+ * Map a raw QVAC/SDK error to something the user can act on, shown UPFRONT
+ * in a Notice — not buried in diagnostics. In particular a context overflow
+ * tells the user to switch to a bigger-context model.
+ */
+export function friendlyQvacError(err: unknown): string {
+  const e = err as { code?: number; name?: string; message?: string };
+  const code = e?.code;
+  const name = typeof e?.name === "string" ? e.name : "";
+  const raw = e instanceof Error ? e.message : String(err);
+  if (code === 52421 || /contextoverflow/i.test(name) || /context.*overflow|exceeds.*context/i.test(raw)) {
+    return (
+      "This note is too long for the current model's context window. " +
+      "In Settings → QVAC Vault Assistant, switch Chat model to Llama 3.2 1B " +
+      "(largest context), or run it on a shorter selection."
+    );
+  }
+  if (code === 52002 || /modelnotfound/i.test(name)) {
+    return "The on-device AI engine restarted — please try the command again.";
+  }
+  return raw;
+}
+
+/**
  * True when the QVAC worker no longer knows a model ID we cached — e.g.
  * `Model with ID "bd4db59fb4120b52" not found` (SDK code 52002,
  * MODEL_NOT_FOUND). This happens when the worker process restarts (heavy
@@ -192,12 +215,16 @@ export class QvacService {
       // single descriptor type, so a union of descriptors won't infer.
       const choice = this.getSettings().llmModel;
       const onProg = { onProgress };
+      // ctx_size 4096: comfortably fits long notes (the SDK default is much
+      // smaller and overflows on ~700-word essays). KV-cache cost is modest
+      // for these sub-1B models.
+      const modelCfg = { modelConfig: { ctx_size: 4096 } };
       const modelId =
         choice === "smollm2-360m"
-          ? await sdk.loadModel({ modelSrc: sdk.SMOLLM2_360M_INST_Q8, ...onProg })
+          ? await sdk.loadModel({ modelSrc: sdk.SMOLLM2_360M_INST_Q8, ...onProg, ...modelCfg })
           : choice === "qwen3-0.6b"
-            ? await sdk.loadModel({ modelSrc: sdk.QWEN3_600M_INST_Q4, ...onProg })
-            : await sdk.loadModel({ modelSrc: sdk.LLAMA_3_2_1B_INST_Q4_0, ...onProg });
+            ? await sdk.loadModel({ modelSrc: sdk.QWEN3_600M_INST_Q4, ...onProg, ...modelCfg })
+            : await sdk.loadModel({ modelSrc: sdk.LLAMA_3_2_1B_INST_Q4_0, ...onProg, ...modelCfg });
       this.llmModelId = modelId;
       this.setStatus("ready");
       notice.setMessage("QVAC: model ready — running 100% on-device");
@@ -252,18 +279,30 @@ export class QvacService {
         const modelId = await this.ensureLlmModel();
         const sdk = await getSdk(this.plugin);
         const s = this.getSettings();
+        // Qwen3 is a reasoning model: without /no_think it can burn its whole
+        // token budget "thinking", leaving nothing for the answer — which
+        // surfaces as an empty result on long inputs.
+        const userContent =
+          s.llmModel === "qwen3-0.6b" ? `${user}\n/no_think` : user;
         const run = sdk.completion({
           modelId,
           history: [
             { role: "system", content: system },
-            { role: "user", content: user },
+            { role: "user", content: userContent },
           ],
           stream: true,
           generationParams: { temp: s.temperature, predict: s.maxTokens },
         });
         let text = "";
         for await (const token of run.tokenStream) text += token;
-        return stripThinking(text).trim();
+        const cleaned = stripThinking(text).trim();
+        if (!cleaned) {
+          throw new Error(
+            "The model returned an empty response — it likely ran out of tokens. " +
+              "Try raising 'Max tokens' in Settings → QVAC Vault Assistant, or use a shorter note/selection."
+          );
+        }
+        return cleaned;
       } catch (err) {
         if (attempt === 0 && isModelNotFound(err)) {
           this.llmModelId = null;
