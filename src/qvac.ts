@@ -1,4 +1,6 @@
+import { createRequire } from "module";
 import { Notice, TFile } from "obsidian";
+import type QvacVaultAssistantPlugin from "./main";
 import type { VaultAssistantSettings } from "./settings";
 
 /** Type-only import: erased at compile time, so the SDK is never loaded eagerly. */
@@ -7,25 +9,87 @@ type QvacSdk = typeof import("@qvac/sdk");
 let sdkPromise: Promise<QvacSdk> | null = null;
 
 /**
+ * Absolute path of this plugin's folder on disk, e.g.
+ * `C:/Users/you/vault/.obsidian/plugins/qvac-vault-assistant`.
+ * Derived from the vault path + manifest id instead of trusting the module
+ * loader's context, which Obsidian does not set up like plain Node does.
+ */
+function getPluginDir(plugin: QvacVaultAssistantPlugin): string {
+  const adapter = plugin.app.vault.adapter as unknown as {
+    getBasePath?: () => string;
+  };
+  const basePath = adapter.getBasePath?.();
+  if (!basePath) {
+    throw new Error(
+      "Could not determine the vault folder (this plugin needs desktop file access)."
+    );
+  }
+  return `${basePath}/.obsidian/plugins/${plugin.manifest.id}`;
+}
+
+/**
+ * Pre-flight check: verify the SDK files actually made it into the installed
+ * plugin folder, and return the plugin dir. A missing/incomplete node_modules
+ * copy (on Windows, usually the 260-char path limit silently skipping files)
+ * is the #1 install failure, so name the exact file that's absent.
+ */
+async function assertSdkFilesPresent(
+  plugin: QvacVaultAssistantPlugin
+): Promise<string> {
+  const rel = (p: string) =>
+    `.obsidian/plugins/${plugin.manifest.id}/node_modules/@qvac/sdk/${p}`;
+  for (const file of ["package.json", "dist/src/index.js"]) {
+    const ok = await plugin.app.vault.adapter.exists(rel(file));
+    if (!ok) {
+      throw new Error(
+        "QVAC SDK files are missing from the installed plugin folder. " +
+          `Expected "${rel(file)}" inside your vault — the node_modules copy is ` +
+          "incomplete (on Windows this is usually the 260-char path limit silently " +
+          "skipping files). Re-copy the plugin's node_modules folder, then reload " +
+          "Obsidian (Ctrl/Cmd+R)."
+      );
+    }
+  }
+  return getPluginDir(plugin);
+}
+
+/**
  * Load the QVAC SDK lazily on first AI use — never at plugin startup.
  *
- * The SDK stays an external `require("@qvac/sdk")` resolved from the plugin
- * folder's own node_modules (its native worker binary must live there).
- * If it can't be resolved, throw an actionable error instead of letting
- * Obsidian fail the entire plugin load with "Failed to load plugin".
+ * Two strategies, most deterministic first:
+ * 1. `createRequire` anchored at the plugin's real folder → resolves
+ *    `node_modules/@qvac/sdk` from disk no matter how the host loaded us.
+ * 2. Bare-specifier dynamic `import("@qvac/sdk")` (host-resolved).
  */
-function getSdk(): Promise<QvacSdk> {
+function getSdk(plugin: QvacVaultAssistantPlugin): Promise<QvacSdk> {
   if (!sdkPromise) {
-    sdkPromise = import("@qvac/sdk").catch((err: unknown) => {
-      sdkPromise = null; // allow retry once the user fixes the install
-      const reason = err instanceof Error ? err.message : String(err);
+    sdkPromise = (async (): Promise<QvacSdk> => {
+      const pluginDir = await assertSdkFilesPresent(plugin);
+      const failures: string[] = [];
+
+      try {
+        const req = createRequire(`${pluginDir}/package.json`);
+        return req("@qvac/sdk") as QvacSdk;
+      } catch (err) {
+        failures.push(
+          `absolute-path require: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+
+      try {
+        return (await import("@qvac/sdk")) as QvacSdk;
+      } catch (err) {
+        failures.push(
+          `dynamic import: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+
+      sdkPromise = null; // allow retry once the install is fixed
       throw new Error(
-        "QVAC SDK failed to load. The plugin folder is probably missing " +
-          "node_modules/@qvac/sdk — copy the ENTIRE built plugin folder " +
-          "(manifest.json, main.js, styles.css AND node_modules), then reload " +
-          `Obsidian (Ctrl/Cmd+R). Technical detail: ${reason}`
+        "QVAC SDK failed to load from the installed plugin folder " +
+          `(${pluginDir}). Tried: ${failures.join(" | ")}`
       );
-    });
+    })();
   }
   return sdkPromise;
 }
@@ -62,7 +126,8 @@ export class QvacService {
 
   constructor(
     private getSettings: () => VaultAssistantSettings,
-    private onStatus: (s: QvacStatus) => void
+    private onStatus: (s: QvacStatus) => void,
+    private plugin: QvacVaultAssistantPlugin
   ) {}
 
   describeStatus(): string {
@@ -95,7 +160,7 @@ export class QvacService {
       notice.setMessage(`QVAC: preparing on-device model… ${p.percentage.toFixed(0)}%`);
     };
     try {
-      const sdk = await getSdk();
+      const sdk = await getSdk(this.plugin);
       // Branch explicitly: loadModel's descriptor overload is generic over a
       // single descriptor type, so a union of two descriptors won't infer.
       const modelId =
@@ -127,7 +192,7 @@ export class QvacService {
     this.setStatus("loading");
     const notice = new Notice("QVAC: preparing embedding model… 0%", 0);
     try {
-      const sdk = await getSdk();
+      const sdk = await getSdk(this.plugin);
       const modelId = await sdk.loadModel({
         modelSrc: sdk.EMBEDDINGGEMMA_300M_Q4_0,
         onProgress: (p: { percentage: number }) => {
@@ -150,7 +215,7 @@ export class QvacService {
   /** Run a chat completion and return the full text. */
   private async runCompletion(system: string, user: string): Promise<string> {
     const modelId = await this.ensureLlmModel();
-    const sdk = await getSdk();
+    const sdk = await getSdk(this.plugin);
     const s = this.getSettings();
     const run = sdk.completion({
       modelId,
@@ -169,7 +234,7 @@ export class QvacService {
   /** Embed one or more texts with the on-device embedding model. */
   async embedTexts(texts: string[]): Promise<number[][]> {
     const modelId = await this.ensureEmbedModel();
-    const sdk = await getSdk();
+    const sdk = await getSdk(this.plugin);
     const { embedding } = await sdk.embed({ modelId, text: texts });
     return embedding;
   }
@@ -234,7 +299,7 @@ export class QvacService {
 
   /** Free model RAM. Called on plugin unload and when switching models. */
   async unloadAll(): Promise<void> {
-    const sdk = await getSdk().catch(() => null);
+    const sdk = await getSdk(this.plugin).catch(() => null);
     const ids = [this.llmModelId, this.embedModelId].filter((id): id is string => !!id);
     this.llmModelId = null;
     this.embedModelId = null;
@@ -257,7 +322,7 @@ export class QvacService {
    * Powers the "Diagnose QVAC setup" command.
    */
   async diagnose(): Promise<string> {
-    const sdk = await getSdk();
+    const sdk = await getSdk(this.plugin);
     const checks: Array<[string, unknown]> = [
       ["loadModel", sdk.loadModel],
       ["completion", sdk.completion],
