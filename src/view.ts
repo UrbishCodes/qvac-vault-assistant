@@ -1,5 +1,6 @@
 import { ItemView, MarkdownRenderer, WorkspaceLeaf } from "obsidian";
 import type QvacVaultAssistantPlugin from "./main";
+import { friendlyQvacError } from "./qvac";
 
 export const VIEW_TYPE_ASSISTANT = "qvac-vault-assistant-view";
 
@@ -81,7 +82,7 @@ export class AssistantView extends ItemView {
       );
       this.messages[this.messages.length - 1] = { role: "assistant", text: answer };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = friendlyQvacError(err);
       this.messages[this.messages.length - 1] = {
         role: "assistant",
         text: `⚠️ ${msg}`,
