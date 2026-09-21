@@ -1,7 +1,7 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type QvacVaultAssistantPlugin from "./main";
 
-export type LlmModelChoice = "llama-3.2-1b" | "qwen3-0.6b";
+export type LlmModelChoice = "smollm2-360m" | "qwen3-0.6b" | "llama-3.2-1b";
 
 export interface VaultAssistantSettings {
   /** Which chat model to load on-device. */
@@ -17,7 +17,7 @@ export interface VaultAssistantSettings {
 }
 
 export const DEFAULT_SETTINGS: VaultAssistantSettings = {
-  llmModel: "llama-3.2-1b",
+  llmModel: "smollm2-360m",
   temperature: 0.7,
   maxTokens: 512,
   relatedNotesLimit: 8,
@@ -44,11 +44,12 @@ export class VaultAssistantSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Chat model")
-      .setDesc("On-device model used for summarize / continue / ask. Larger is smarter, smaller is faster.")
+      .setDesc("On-device model used for summarize / continue / ask. Smaller is faster; larger is smarter.")
       .addDropdown((drop) =>
         drop
-          .addOption("llama-3.2-1b", "Llama 3.2 1B (recommended)")
-          .addOption("qwen3-0.6b", "Qwen3 0.6B (fastest)")
+          .addOption("smollm2-360m", "SmolLM2 360M (fastest, recommended)")
+          .addOption("qwen3-0.6b", "Qwen3 0.6B (balanced)")
+          .addOption("llama-3.2-1b", "Llama 3.2 1B (best quality, slower)")
           .setValue(this.plugin.settings.llmModel)
           .onChange(async (value) => {
             this.plugin.settings.llmModel = value as LlmModelChoice;
