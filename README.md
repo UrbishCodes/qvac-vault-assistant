@@ -35,33 +35,56 @@ with `unloadModel` freeing RAM on disable.
 - Disk: ~2 GB free for the first model download. RAM: ≥ 4 GB recommended.
 - `@qvac/sdk` version used: **0.19.1** (declared in `package.json`, satisfies ≥ 0.19.0).
 
-## Install
+## Install on Obsidian desktop
 
-1. Clone this repo:
-   ```bash
-   git clone https://github.com/Adata-cmd/qvac-vault-assistant.git
-   cd qvac-vault-assistant
-   ```
-2. Install dependencies (this installs `@qvac/sdk` — required at runtime):
-   ```bash
-   npm install
-   ```
-3. Build the plugin:
-   ```bash
-   npm run build
-   ```
-   This produces `main.js` next to `manifest.json` and `styles.css`.
-4. Copy the **entire plugin folder** (including `node_modules`, so `@qvac/sdk` and its
-   worker resolve) into your vault:
-   ```
-   <vault>/.obsidian/plugins/qvac-vault-assistant/
-   ```
-5. In Obsidian: **Settings → Community plugins → enable "QVAC Vault Assistant"**
-   (turn off Safe mode first if needed).
-6. Run any command (e.g. *Summarize current note*). The model downloads on first use —
-   watch the progress notice, then everything runs locally.
+You've built the code — now put it where Obsidian looks for plugins.
 
-> **Dev mode:** `npm run dev` watches `src/` and rebuilds `main.js` on change.
+**1. Find your vault folder.** That's the folder you chose when you created your
+vault (e.g. `~/Documents/MyVault`). In Obsidian you can check under
+Settings → About if you're unsure.
+
+**2. Copy the whole plugin folder into it.** Open a terminal and run these two
+commands, replacing the vault path with yours:
+
+```bash
+mkdir -p "/path/to/your/vault/.obsidian/plugins"
+cp -r qvac-vault-assistant "/path/to/your/vault/.obsidian/plugins/"
+```
+
+Copy the **entire** folder, including `node_modules` — the plugin loads `@qvac/sdk`
+from there when it runs. When done it should look like this:
+
+```
+your-vault/.obsidian/plugins/qvac-vault-assistant/
+├── manifest.json
+├── main.js
+├── styles.css
+└── node_modules/
+    └── @qvac/sdk/
+```
+
+**3. Enable the plugin in Obsidian.**
+- Go to Settings → Community plugins and turn off **Safe mode** (confirm the prompt).
+- Find **QVAC Vault Assistant** in the plugin list and toggle it on.
+- If it doesn't show up, reload Obsidian (`Ctrl/Cmd+R`) and double-check the folder
+  name is exactly `qvac-vault-assistant`.
+
+**4. Run your first command.**
+- Open any note, press `Ctrl/Cmd+P`, and run **Summarize current note**.
+- The first run downloads the model (~2 GB, one time) — watch the progress notice.
+  After that everything runs locally; no internet needed.
+
+> **Dev mode:** `npm run dev` watches `src/` and rebuilds `main.js` on change —
+> then reload Obsidian (`Ctrl/Cmd+R`) to pick it up.
+
+## Build from source (optional)
+
+```bash
+git clone https://github.com/Adata-cmd/qvac-vault-assistant.git
+cd qvac-vault-assistant
+npm install     # installs @qvac/sdk, required at runtime
+npm run build   # produces main.js next to manifest.json and styles.css
+```
 
 ## How it works
 
@@ -93,7 +116,7 @@ except the one-time model download from the QVAC model registry.
 - [x] `@qvac/sdk@0.19.1` declared in `package.json` (≥ 0.19.0)
 - [x] Calls `loadModel` + `completion` + `embed` (+ `unloadModel`) — all real SDK functions
 - [x] All inference on-device (no cloud AI anywhere)
-- [x] Public repo, MIT license, README with install/run steps and SDK version
+- [ ] Public repo — private during local testing, will be public before Whop submission; MIT license, README with install/run steps and SDK version
 - [x] Original code — written for this bounty, not a fork of `qvac-examples`
 
 ## License
