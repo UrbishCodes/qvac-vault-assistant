@@ -1,0 +1,104 @@
+/* QVAC Vault Assistant — plugin styles */
+
+.qvac-settings-note {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+/* ---- Ask / result modals ---- */
+.qvac-ask-input {
+  width: 100%;
+  margin: 8px 0 4px 0;
+}
+
+.qvac-btn-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  justify-content: flex-end;
+}
+
+.qvac-result-modal .qvac-result-body {
+  max-height: 50vh;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 8px;
+  user-select: text;
+}
+
+.qvac-related-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+}
+
+.qvac-related-list li {
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.qvac-related-link {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.qvac-related-meta {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+/* ---- Assistant side view ---- */
+.qvac-assistant-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 12px;
+  gap: 8px;
+}
+
+.qvac-view-title {
+  margin: 0;
+}
+
+.qvac-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 2px;
+}
+
+.qvac-chat-msg {
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: var(--font-ui-small);
+  user-select: text;
+}
+
+.qvac-chat-user {
+  background: var(--background-secondary);
+  align-self: flex-end;
+  max-width: 90%;
+  white-space: pre-wrap;
+}
+
+.qvac-chat-assistant {
+  background: var(--background-primary-alt);
+  border: 1px solid var(--background-modifier-border);
+  align-self: flex-start;
+  max-width: 95%;
+}
+
+.qvac-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.qvac-chat-input {
+  width: 100%;
+  resize: vertical;
+}
