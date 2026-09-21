@@ -9,6 +9,33 @@ type QvacSdk = typeof import("@qvac/sdk");
 let sdkPromise: Promise<QvacSdk> | null = null;
 
 /**
+ * Reasoning models (e.g. Qwen3) wrap their chain-of-thought in
+ * `<think>...</think>` — or ramble through it untagged. The user should only
+ * ever see the final answer, so strip those blocks (including an unclosed
+ * trailing one, in case generation was cut off).
+ */
+function stripThinking(text: string): string {
+  return text
+    .replace(/<think>[\s\S]*?(<\/think>|$)/gi, "")
+    .replace(/^\s*$/, "")
+    .trim();
+}
+
+/**
+ * True when the QVAC worker no longer knows a model ID we cached — e.g.
+ * `Model with ID "bd4db59fb4120b52" not found` (SDK code 52002,
+ * MODEL_NOT_FOUND). This happens when the worker process restarts (heavy
+ * model loads can crash it); the fix is to load the model again.
+ */
+function isModelNotFound(err: unknown): boolean {
+  const e = err as { code?: number; name?: string; message?: string };
+  if (e?.code === 52002) return true;
+  if (typeof e?.name === "string" && /modelnotfound/i.test(e.name)) return true;
+  const msg = typeof e?.message === "string" ? e.message : String(err);
+  return /model with id .* not found/i.test(msg);
+}
+
+/**
  * Absolute path of this plugin's folder on disk, e.g.
  * `C:/Users/you/vault/.obsidian/plugins/qvac-vault-assistant`.
  * Derived from the vault path + manifest id instead of trusting the module
@@ -162,11 +189,15 @@ export class QvacService {
     try {
       const sdk = await getSdk(this.plugin);
       // Branch explicitly: loadModel's descriptor overload is generic over a
-      // single descriptor type, so a union of two descriptors won't infer.
+      // single descriptor type, so a union of descriptors won't infer.
+      const choice = this.getSettings().llmModel;
+      const onProg = { onProgress };
       const modelId =
-        this.getSettings().llmModel === "qwen3-0.6b"
-          ? await sdk.loadModel({ modelSrc: sdk.QWEN3_600M_INST_Q4, onProgress })
-          : await sdk.loadModel({ modelSrc: sdk.LLAMA_3_2_1B_INST_Q4_0, onProgress });
+        choice === "smollm2-360m"
+          ? await sdk.loadModel({ modelSrc: sdk.SMOLLM2_360M_INST_Q8, ...onProg })
+          : choice === "qwen3-0.6b"
+            ? await sdk.loadModel({ modelSrc: sdk.QWEN3_600M_INST_Q4, ...onProg })
+            : await sdk.loadModel({ modelSrc: sdk.LLAMA_3_2_1B_INST_Q4_0, ...onProg });
       this.llmModelId = modelId;
       this.setStatus("ready");
       notice.setMessage("QVAC: model ready — running 100% on-device");
@@ -214,43 +245,69 @@ export class QvacService {
 
   /** Run a chat completion and return the full text. */
   private async runCompletion(system: string, user: string): Promise<string> {
-    const modelId = await this.ensureLlmModel();
-    const sdk = await getSdk(this.plugin);
-    const s = this.getSettings();
-    const run = sdk.completion({
-      modelId,
-      history: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      stream: true,
-      generationParams: { temp: s.temperature, predict: s.maxTokens },
-    });
-    let text = "";
-    for await (const token of run.tokenStream) text += token;
-    return text.trim();
+    // Retry once if the worker lost our model (e.g. it restarted after a
+    // heavy load): drop the stale ID and load fresh.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const modelId = await this.ensureLlmModel();
+        const sdk = await getSdk(this.plugin);
+        const s = this.getSettings();
+        const run = sdk.completion({
+          modelId,
+          history: [
+            { role: "system", content: system },
+            { role: "user", content: user },
+          ],
+          stream: true,
+          generationParams: { temp: s.temperature, predict: s.maxTokens },
+        });
+        let text = "";
+        for await (const token of run.tokenStream) text += token;
+        return stripThinking(text).trim();
+      } catch (err) {
+        if (attempt === 0 && isModelNotFound(err)) {
+          this.llmModelId = null;
+          this.llmLoading = null;
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new Error("unreachable");
   }
 
   /** Embed one or more texts with the on-device embedding model. */
   async embedTexts(texts: string[]): Promise<number[][]> {
-    const modelId = await this.ensureEmbedModel();
-    const sdk = await getSdk(this.plugin);
-    const { embedding } = await sdk.embed({ modelId, text: texts });
-    return embedding;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const modelId = await this.ensureEmbedModel();
+        const sdk = await getSdk(this.plugin);
+        const { embedding } = await sdk.embed({ modelId, text: texts });
+        return embedding;
+      } catch (err) {
+        if (attempt === 0 && isModelNotFound(err)) {
+          this.embedModelId = null;
+          this.embedLoading = null;
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new Error("unreachable");
   }
 
   // ---------- High-level note features ----------
 
   async summarize(noteText: string): Promise<string> {
     return this.runCompletion(
-      "You summarize notes clearly and concisely. Reply in markdown.",
+      "You summarize notes clearly and concisely. Reply in markdown. Output ONLY the final summary — never narrate your thinking, planning, or reasoning process.",
       `Summarize the following note. Start with a 2-3 sentence TL;DR, then bullet the key points. Keep it tight:\n\n${noteText}`
     );
   }
 
   async continueText(context: string): Promise<string> {
     return this.runCompletion(
-      "You are a writing assistant inside a note-taking app. Continue the user's writing in the same voice, tone, and formatting. Output ONLY the continuation — no preamble, no quotes.",
+      "You are a writing assistant inside a note-taking app. Continue the user's writing in the same voice, tone, and formatting. Output ONLY the continuation — no preamble, no quotes, never narrate your thinking or planning.",
       `Continue writing from here:\n\n${context}`
     );
   }
@@ -258,14 +315,14 @@ export class QvacService {
   async answerAboutNote(question: string, noteText: string, noteName: string | null): Promise<string> {
     const scope = noteName ? `the note titled "${noteName}"` : "the provided note";
     return this.runCompletion(
-      "You answer questions using ONLY the provided note. If the answer is not in the note, say so honestly. Reply in markdown.",
+      "You answer questions using ONLY the provided note. If the answer is not in the note, say so honestly. Reply in markdown. Output ONLY the final answer — never narrate your thinking, planning, or reasoning process.",
       `Question about ${scope}: ${question}\n\nNote content:\n${noteText}`
     );
   }
 
   async extractActionItems(noteText: string): Promise<string> {
     return this.runCompletion(
-      "You extract action items from notes. Reply ONLY with a markdown checklist (- [ ] ...). If there are none, reply: _No action items found._",
+      "You extract action items from notes. Reply ONLY with a markdown checklist (- [ ] ...). If there are none, reply: _No action items found._ Never narrate your thinking or planning.",
       `Extract every action item, task, todo, or follow-up from this note:\n\n${noteText}`
     );
   }
