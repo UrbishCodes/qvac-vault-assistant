@@ -15,6 +15,7 @@ export function registerCommands(plugin: QvacVaultAssistantPlugin): void {
   plugin.addCommand({
     id: "summarize-note",
     name: "Summarize current note",
+    hotkeys: [{ modifiers: ["Alt"], key: "S" }],
     checkCallback: (checking: boolean) => {
       const file = plugin.getActiveFile();
       if (!file) return false;
@@ -26,6 +27,7 @@ export function registerCommands(plugin: QvacVaultAssistantPlugin): void {
   plugin.addCommand({
     id: "continue-writing",
     name: "Continue writing from cursor",
+    hotkeys: [{ modifiers: ["Alt"], key: "C" }],
     editorCheckCallback: (checking: boolean, editor: Editor, _ctx: MarkdownView | MarkdownFileInfo) => {
       if (!plugin.getActiveFile()) return false;
       if (!checking) void continueWriting(plugin, editor);
@@ -36,6 +38,7 @@ export function registerCommands(plugin: QvacVaultAssistantPlugin): void {
   plugin.addCommand({
     id: "ask-about-note",
     name: "Ask about current note…",
+    hotkeys: [{ modifiers: ["Alt"], key: "A" }],
     checkCallback: (checking: boolean) => {
       const file = plugin.getActiveFile();
       if (!file) return false;
@@ -47,6 +50,7 @@ export function registerCommands(plugin: QvacVaultAssistantPlugin): void {
   plugin.addCommand({
     id: "extract-action-items",
     name: "Extract action items from note",
+    hotkeys: [{ modifiers: ["Alt"], key: "N" }],
     checkCallback: (checking: boolean) => {
       const file = plugin.getActiveFile();
       if (!file) return false;
@@ -58,18 +62,21 @@ export function registerCommands(plugin: QvacVaultAssistantPlugin): void {
   plugin.addCommand({
     id: "find-related-notes",
     name: "Find related notes (semantic search)…",
+    hotkeys: [{ modifiers: ["Alt"], key: "F" }],
     callback: () => void findRelatedNotes(plugin),
   });
 
   plugin.addCommand({
     id: "open-assistant-view",
     name: "Open Vault Assistant",
+    hotkeys: [{ modifiers: ["Alt"], key: "O" }],
     callback: () => void plugin.activateView(),
   });
 
   plugin.addCommand({
     id: "diagnose-setup",
     name: "Diagnose QVAC setup",
+    hotkeys: [{ modifiers: ["Alt"], key: "D" }],
     callback: () =>
       void (async () => {
         try {
