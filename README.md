@@ -43,6 +43,15 @@ git clone https://github.com/Adata-cmd/qvac-vault-assistant.git
 cd qvac-vault-assistant
 ```
 
+> 🎬 **Video walkthrough** — or follow this if you're a pro:
+>
+> <video src="https://raw.githubusercontent.com/Adata-cmd/qvac-vault-assistant/main/assets/install-demo.mp4" width="720" controls></video>
+>
+> 💡 **Note:** the local AI model downloads **once** on first run (hit
+> *Load model now* in the plugin settings and watch the progress). After that
+> it's cached on your disk and loads straight from local storage into memory —
+> no internet needed afterwards.
+
 ### 2. 📦 Install dependencies
 
 ```bash
