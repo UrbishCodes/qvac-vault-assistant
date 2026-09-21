@@ -86,6 +86,19 @@ your-vault/.obsidian/plugins/qvac-vault-assistant/
     └── @qvac/sdk/
 ```
 
+> ⚠️ **Heads-up:** `node_modules` is ~5 GB — the QVAC SDK ships every on-device
+> engine (LLM, embeddings, diffusion, OCR, TTS, translation…) and its worker
+> loads all of them, so the whole folder must be copied. It's a one-time copy.
+> On Windows, if Explorer struggles with a copy this large, use `robocopy`
+> (handles big copies and long paths, shows progress):
+>
+> ```cmd
+> robocopy "C:\path\to\qvac-vault-assistant\node_modules" "C:\path\to\<your-vault>\.obsidian\plugins\qvac-vault-assistant\node_modules" /E
+> ```
+>
+> If a command later says `Cannot find module '@qvac/sdk'`, this copy is what
+> went missing — re-copy `node_modules` and reload Obsidian (`Ctrl/Cmd+R`).
+
 ### 5. 🔌 Enable the plugin in Obsidian
 
 1. Open **Settings → Community plugins**.
