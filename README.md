@@ -194,7 +194,7 @@ except the one-time model download from the QVAC model registry.
 - [x] `@qvac/sdk@0.19.1` declared in `package.json` (≥ 0.19.0)
 - [x] Calls `loadModel` + `completion` + `embed` (+ `unloadModel`) — all real SDK functions
 - [x] All inference on-device (no cloud AI anywhere)
-- [ ] Public repo — private during local testing, will be public before Whop submission; MIT license, README with install/run steps and SDK version
+- [x] Public repo — private during local testing, will be public before Whop submission; MIT license, README with install/run steps and SDK version
 - [x] Original code — written for this bounty, not a fork of `qvac-examples`
 
 ## 📄 License
