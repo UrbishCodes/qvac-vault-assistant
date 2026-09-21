@@ -104,6 +104,58 @@ async function assertSdkFilesPresent(
 }
 
 /**
+ * Hide the QVAC engine's console window on Windows.
+ *
+ * The SDK spawns its AI engine (`bare` runtime) through `bare-runtime/spawn`
+ * WITHOUT Node's `windowsHide` flag, so Windows pops a console window to the
+ * front every time the engine starts — poor UX inside Obsidian.
+ *
+ * `bare-runtime/spawn` forwards its options object straight into
+ * `child_process.spawn`, which DOES honor `windowsHide`; the SDK just never
+ * sets it and exposes no option for it.
+ *
+ * Fix: this plugin loads the SDK lazily (see getSdk), so BEFORE the SDK
+ * module is first evaluated we resolve the exact `bare-runtime/spawn` copy
+ * the SDK will use and wrap its export to force `windowsHide: true`. The
+ * wrapper only adds the flag and delegates everything else, so engine startup
+ * is unaffected. On macOS/Linux Node ignores the flag. Best-effort: if the
+ * patch can't apply it fails silently and behavior is unchanged (visible
+ * console) — never a startup failure.
+ */
+function patchBareSpawnHideWindow(sdkRequire: NodeRequire): void {
+  if (process.platform !== "win32") return;
+  try {
+    const resolved: string = sdkRequire.resolve("bare-runtime/spawn");
+    // Require it here so the entry is definitely in require.cache, then patch
+    // the cached exports — this is the exact module object the SDK will get.
+    const orig = sdkRequire("bare-runtime/spawn") as {
+      (...args: unknown[]): unknown;
+      __qvacHidePatched?: boolean;
+    };
+    if (typeof orig !== "function" || orig.__qvacHidePatched) {
+      return;
+    }
+    const wrapped = function (referrer: unknown, opts: unknown): unknown {
+      let r = referrer;
+      let o: Record<string, unknown>;
+      if (r !== null && typeof r === "object") {
+        o = r as Record<string, unknown>;
+        r = "bare";
+      } else {
+        o = (opts ?? {}) as Record<string, unknown>;
+      }
+      o = { ...o, windowsHide: true };
+      return orig(r, o);
+    };
+    (wrapped as { __qvacHidePatched?: boolean }).__qvacHidePatched = true;
+    const entry = sdkRequire.cache[resolved];
+    if (entry) entry.exports = wrapped;
+  } catch {
+    /* best-effort: engine still works, console just stays visible */
+  }
+}
+
+/**
  * Load the QVAC SDK lazily on first AI use — never at plugin startup.
  *
  * Two strategies, most deterministic first:
@@ -119,6 +171,14 @@ function getSdk(plugin: QvacVaultAssistantPlugin): Promise<QvacSdk> {
 
       try {
         const req = createRequire(`${pluginDir}/package.json`);
+        // Hide the engine console window on Windows: patch bare-runtime/spawn
+        // BEFORE the SDK module is first evaluated, otherwise its top-level
+        // import captures the unpatched spawner.
+        try {
+          patchBareSpawnHideWindow(createRequire(req.resolve("@qvac/sdk")));
+        } catch {
+          /* best-effort: console stays visible, engine unaffected */
+        }
         return req("@qvac/sdk") as QvacSdk;
       } catch (err) {
         failures.push(
