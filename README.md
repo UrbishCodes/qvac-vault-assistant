@@ -23,7 +23,7 @@ with `unloadModel` freeing RAM when the plugin is disabled.
 | Open Vault Assistant | Side-panel chat grounded in the active note | `completion` |
 
 - 📊 **Status bar** shows model state (`idle` → `loading…` → `ready`).
-- ⚙️ **Settings tab**: pick the chat model (Llama 3.2 1B / Qwen3 0.6B), temperature, max tokens,
+- ⚙️ **Settings tab**: pick the chat model (SmolLM2 360M / Qwen3 0.6B / Llama 3.2 1B), temperature, max tokens,
   related-notes limit, auto-unload on disable, plus manual Load/Unload buttons.
 - 💾 Models download **once** on first use (with progress) and are cached locally by the SDK.
 
