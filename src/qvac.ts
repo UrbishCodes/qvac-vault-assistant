@@ -300,8 +300,15 @@ export class QvacService {
 
   async summarize(noteText: string): Promise<string> {
     return this.runCompletion(
-      "You summarize notes clearly and concisely. Reply in markdown. Output ONLY the final summary — never narrate your thinking, planning, or reasoning process.",
-      `Summarize the following note. Start with a 2-3 sentence TL;DR, then bullet the key points. Keep it tight:\n\n${noteText}`
+      "You are a summarizer. You ALWAYS paraphrase: restate every idea in completely new words. You NEVER copy sentences, phrases, headings, or formatting from the input. Your output must be much shorter than the input.",
+      `Summarize the note below in your own words.\n` +
+        `Rules:\n` +
+        `1. Maximum 120 words total.\n` +
+        `2. Start with "TL;DR:" followed by 1-2 sentences capturing the single most important idea.\n` +
+        `3. Then 3-5 bullet points, one sentence each, covering the remaining key points.\n` +
+        `4. Use your own words - do not copy any sentence from the note.\n` +
+        `5. Skip quotes and minor details.\n\n` +
+        `Note:\n${noteText}`
     );
   }
 
@@ -315,8 +322,8 @@ export class QvacService {
   async answerAboutNote(question: string, noteText: string, noteName: string | null): Promise<string> {
     const scope = noteName ? `the note titled "${noteName}"` : "the provided note";
     return this.runCompletion(
-      "You answer questions using ONLY the provided note. If the answer is not in the note, say so honestly. Reply in markdown. Output ONLY the final answer — never narrate your thinking, planning, or reasoning process.",
-      `Question about ${scope}: ${question}\n\nNote content:\n${noteText}`
+      "You answer questions about a note. Answer directly in 2-5 sentences using your own words. NEVER repeat, reformat, or paste the note back. If asked what the note is about, briefly describe its topic and main points — do not dump the note's contents.",
+      `Note:\n${noteText}\n\nQuestion about ${scope}: ${question}\n\nAnswer the question above using only the note. Be concise, in your own words.`
     );
   }
 
