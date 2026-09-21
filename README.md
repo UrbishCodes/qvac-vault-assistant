@@ -45,9 +45,7 @@ cd qvac-vault-assistant
 
 > 🎬 **Video walkthrough** — or follow this if you're a pro:
 >
-> <!-- 🎬 INSTALL VIDEO — paste your uploaded video URL on the line below.
->      (Drag-drop the mp4 into any comment box on github.com, copy the
->      user-attachments URL it gives you, and paste it here on its own line.) -->
+> https://github.com/user-attachments/assets/6783d96c-7b23-437c-9e62-a0c2bcf96470
 >
 > 💡 **Note:** the local AI model downloads **once** on first run (hit
 > *Load model now* in the plugin settings and watch the progress). After that
@@ -137,15 +135,15 @@ your-vault/.obsidian/plugins/qvac-vault-assistant/
 
 ### 📝 Summary demo
 
-<!-- 🎬 SUMMARY VIDEO — paste your uploaded video URL on the line below. -->
+https://github.com/user-attachments/assets/55d27513-7e74-4431-b4f6-83afafd4adcb
 
 ### ❓ Ask-question demo
 
-<!-- 🎬 ASK-QUESTION VIDEO — paste your uploaded video URL on the line below. -->
+https://github.com/user-attachments/assets/fc89838d-fc0f-4b6b-9c02-26557c523712
 
 ### ⌨️ Autocompletion demo
 
-<!-- 🎬 AUTOCOMPLETION VIDEO — paste your uploaded video URL on the line below. -->
+https://github.com/user-attachments/assets/e785982a-01d1-4658-8f7a-946f674f3200
 
 > ⚠️ **Note:** output quality depends on which model you pick. Small local models
 > can sometimes hallucinate or return no output at all — just retry the command.
