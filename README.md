@@ -44,7 +44,8 @@ cd qvac-vault-assistant
 ```
 
 > 🎬 **Video walkthrough** — or follow this if you're a pro:
-> [▶️ Watch the install demo](assets/install-demo.mp4) (~1 min)
+>
+> https://github.com/user-attachments/assets/6783d96c-7b23-437c-9e62-a0c2bcf96470
 >
 > 💡 **Note:** the local AI model downloads **once** on first run (hit
 > *Load model now* in the plugin settings and watch the progress). After that
@@ -129,6 +130,25 @@ your-vault/.obsidian/plugins/qvac-vault-assistant/
 
 > 🛠️ **Dev mode:** `npm run dev` watches `src/` and rebuilds `main.js` on change —
 > then reload Obsidian (`Ctrl/Cmd+R`) to pick it up.
+
+## 🎬 Demos
+
+### 📝 Summary demo
+
+https://github.com/user-attachments/assets/55d27513-7e74-4431-b4f6-83afafd4adcb
+
+### ❓ Ask-question demo
+
+https://github.com/user-attachments/assets/fc89838d-fc0f-4b6b-9c02-26557c523712
+
+### ⌨️ Autocompletion demo
+
+https://github.com/user-attachments/assets/e785982a-01d1-4658-8f7a-946f674f3200
+
+> ⚠️ **Note:** output quality depends on which model you pick. Small local models
+> can sometimes hallucinate or return no output at all — just retry the command.
+> If it still doesn't work, restart Obsidian or switch to a different model in
+> the plugin settings.
 
 ## 🧠 How it works
 
