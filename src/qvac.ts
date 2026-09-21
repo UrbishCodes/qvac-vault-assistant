@@ -114,42 +114,63 @@ async function assertSdkFilesPresent(
  * `child_process.spawn`, which DOES honor `windowsHide`; the SDK just never
  * sets it and exposes no option for it.
  *
- * Fix: this plugin loads the SDK lazily (see getSdk), so BEFORE the SDK
- * module is first evaluated we resolve the exact `bare-runtime/spawn` copy
- * the SDK will use and wrap its export to force `windowsHide: true`. The
- * wrapper only adds the flag and delegates everything else, so engine startup
- * is unaffected. On macOS/Linux Node ignores the flag. Best-effort: if the
- * patch can't apply it fails silently and behavior is unchanged (visible
- * console) — never a startup failure.
+ * Fix: wrap `child_process.spawn` itself. Why here and not around
+ * `bare-runtime/spawn`: the SDK pulls `bare-runtime/spawn` in through an ESM
+ * `import`, and ESM imports never consult `require.cache`, so a require-cache
+ * patch is invisible to the SDK (that's why the first attempt didn't work).
+ * But `bare-runtime/spawn` is CJS and funnels every launch through
+ * `require("child_process").spawn`, reading `.spawn` off the shared builtin
+ * exports object AT CALL TIME — so wrapping that is seen no matter how the
+ * SDK was loaded (require or import) and no matter which copy of
+ * `bare-runtime/spawn` it resolved.
+ *
+ * The wrapper is surgical: it only forces `windowsHide: true` on the QVAC
+ * bare-worker launch — fingerprinted by the SDK worker entry
+ * (`dist/src/worker/index.js`) as the first spawn arg and/or
+ * bare-runtime/spawn's `platform`/`arch` option fields (plain
+ * child_process.spawn calls never carry those). Every other child process in
+ * the host is untouched. On macOS/Linux Node ignores the flag. Best-effort:
+ * if the patch can't apply it fails silently and behavior is unchanged
+ * (visible console) — never a startup failure.
  */
-function patchBareSpawnHideWindow(sdkRequire: NodeRequire): void {
+function patchEngineSpawnHideWindow(): void {
   if (process.platform !== "win32") return;
   try {
-    const resolved: string = sdkRequire.resolve("bare-runtime/spawn");
-    // Require it here so the entry is definitely in require.cache, then patch
-    // the cached exports — this is the exact module object the SDK will get.
-    const orig = sdkRequire("bare-runtime/spawn") as {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const cp = require("child_process") as typeof import("child_process");
+    const origSpawn = cp.spawn as unknown as {
       (...args: unknown[]): unknown;
       __qvacHidePatched?: boolean;
     };
-    if (typeof orig !== "function" || orig.__qvacHidePatched) {
-      return;
+    if (typeof origSpawn !== "function" || origSpawn.__qvacHidePatched) {
+      return; // already patched (or spawn unavailable)
     }
-    const wrapped = function (referrer: unknown, opts: unknown): unknown {
-      let r = referrer;
-      let o: Record<string, unknown>;
-      if (r !== null && typeof r === "object") {
-        o = r as Record<string, unknown>;
-        r = "bare";
-      } else {
-        o = (opts ?? {}) as Record<string, unknown>;
+    const wrapped = function (...args: unknown[]): unknown {
+      // spawn(command[, args][, options]) — normalize to (command, args, options)
+      const command = args[0];
+      let spawnArgs: unknown[] = [];
+      let options: Record<string, unknown> = {};
+      if (Array.isArray(args[1])) {
+        spawnArgs = args[1] as unknown[];
+        if (args[2] && typeof args[2] === "object") {
+          options = { ...(args[2] as Record<string, unknown>) };
+        }
+      } else if (args[1] && typeof args[1] === "object") {
+        options = { ...(args[1] as Record<string, unknown>) };
       }
-      o = { ...o, windowsHide: true };
-      return orig(r, o);
+      const firstArg = String(spawnArgs[0] ?? "").replace(/\\/g, "/");
+      const isQvacWorker =
+        /\/worker\/index\.js$/.test(firstArg) ||
+        (typeof options.platform === "string" &&
+          typeof options.arch === "string");
+      if (isQvacWorker) {
+        options = { ...options, windowsHide: true };
+        console.debug("[qvac] engine launch: windowsHide applied");
+      }
+      return Reflect.apply(origSpawn, cp, [command, spawnArgs, options]);
     };
     (wrapped as { __qvacHidePatched?: boolean }).__qvacHidePatched = true;
-    const entry = sdkRequire.cache[resolved];
-    if (entry) entry.exports = wrapped;
+    (cp as unknown as Record<string, unknown>).spawn = wrapped;
   } catch {
     /* best-effort: engine still works, console just stays visible */
   }
@@ -169,16 +190,14 @@ function getSdk(plugin: QvacVaultAssistantPlugin): Promise<QvacSdk> {
       const pluginDir = await assertSdkFilesPresent(plugin);
       const failures: string[] = [];
 
+      // Hide the engine console window on Windows. This wraps
+      // child_process.spawn — which every SDK engine launch funnels through
+      // at call time — so it works however the SDK gets loaded below.
+      // Idempotent and best-effort: safe to call on every load attempt.
+      patchEngineSpawnHideWindow();
+
       try {
         const req = createRequire(`${pluginDir}/package.json`);
-        // Hide the engine console window on Windows: patch bare-runtime/spawn
-        // BEFORE the SDK module is first evaluated, otherwise its top-level
-        // import captures the unpatched spawner.
-        try {
-          patchBareSpawnHideWindow(createRequire(req.resolve("@qvac/sdk")));
-        } catch {
-          /* best-effort: console stays visible, engine unaffected */
-        }
         return req("@qvac/sdk") as QvacSdk;
       } catch (err) {
         failures.push(
