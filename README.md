@@ -150,6 +150,20 @@ https://github.com/user-attachments/assets/e785982a-01d1-4658-8f7a-946f674f3200
 > If it still doesn't work, restart Obsidian or switch to a different model in
 > the plugin settings.
 
+## 📸 Screenshots
+
+| Settings — model ready, 100% on-device | Summarize — TL;DR + key points in seconds |
+|---|---|
+| ![Settings](assets/screenshots/01-settings.png) | ![Summary](assets/screenshots/02-summary.png) |
+
+| Ask about a note | Grounded answer, insertable at cursor |
+|---|---|
+| ![Ask](assets/screenshots/03-ask.png) | ![Ask result](assets/screenshots/04-ask-result.png) |
+
+| Continue writing — on-device | The model picks up your thought |
+|---|---|
+| ![Continue writing](assets/screenshots/05-continue-writing.png) | ![Continue result](assets/screenshots/06-continue-result.png) |
+
 ## 🧠 How it works
 
 ```
