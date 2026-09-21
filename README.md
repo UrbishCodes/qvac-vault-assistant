@@ -44,8 +44,7 @@ cd qvac-vault-assistant
 ```
 
 > 🎬 **Video walkthrough** — or follow this if you're a pro:
->
-> <video src="https://raw.githubusercontent.com/Adata-cmd/qvac-vault-assistant/main/assets/install-demo.mp4" width="720" controls></video>
+> [▶️ Watch the install demo](assets/install-demo.mp4) (~1 min)
 >
 > 💡 **Note:** the local AI model downloads **once** on first run (hit
 > *Load model now* in the plugin settings and watch the progress). After that
