@@ -39,7 +39,7 @@ with `unloadModel` freeing RAM when the plugin is disabled.
 ### 1. 📥 Clone the repo
 
 ```bash
-git clone https://github.com/Adata-cmd/qvac-vault-assistant.git
+git clone https://github.com/sabin0639/qvac-vault-assistant.git
 cd qvac-vault-assistant
 ```
 
